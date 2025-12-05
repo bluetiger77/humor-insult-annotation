@@ -121,6 +121,26 @@
             }
         }
 
+        function findResumeIndex() {
+            let lastModified = -1;
+
+            for (let i = 0; i < rows.length; i++) {
+                const r = rows[i];
+                const modified = r.humor_gold || r.insult_gold || r.notes;
+                if (modified) {
+                    lastModified = i;
+                }
+            }
+
+            // If nothing modified yet → start at 0
+            if (lastModified === -1) return 0;
+
+            // Otherwise go to the *next* row, but don't exceed bounds
+            return Math.min(lastModified + 1, rows.length - 1);
+        }
+
+
+
         function saveToLocalStorage() {
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(rows));
         }
@@ -227,7 +247,8 @@
                 loadFromLocalStorage();
                 loadingEl.style.display = "none";
                 appEl.style.display = "block";
-                showRow(0);
+                const startIndex = findResumeIndex();
+                showRow(startIndex);
             })
             .catch(err => {
                 loadingEl.textContent = "Error loading data: " + err.message;
