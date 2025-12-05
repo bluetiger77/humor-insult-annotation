@@ -121,6 +121,17 @@
             }
         }
 
+        function findFirstUnlabeledIndex() {
+            for (let i = 0; i < rows.length; i++) {
+                const r = rows[i];
+                if (!(r.humor_gold || r.insult_gold || r.notes)) {
+                    return i;
+                }
+            }
+            return 0;  // fallback if all rows labeled
+        }
+
+
         function saveToLocalStorage() {
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(rows));
         }
@@ -227,7 +238,8 @@
                 loadFromLocalStorage();
                 loadingEl.style.display = "none";
                 appEl.style.display = "block";
-                showRow(0);
+                const startIndex = findFirstUnlabeledIndex();
+                showRow(startIndex);
             })
             .catch(err => {
                 loadingEl.textContent = "Error loading data: " + err.message;
