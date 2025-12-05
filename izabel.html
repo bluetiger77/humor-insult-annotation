@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Izabel Reddit Annotation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- PapaParse for CSV parsing/unparsing -->
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 1.5rem;
+            line-height: 1.5;
+        }
+
+        textarea {
+            width: 100%;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background: #fafafa;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        button {
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+        }
+
+        .progress {
+            margin-bottom: 0.75rem;
+            font-weight: 500;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Reddit Annotation – Izabel</h1>
+
+    <div id="loading">Loading data…</div>
+    <div id="app" style="display:none;">
+        <div class="progress" id="progressText"></div>
+
+        <div class="card">
+            <h2>Parent Comment</h2>
+            <textarea id="parentText" rows="6" readonly></textarea>
+        </div>
+
+        <div class="card">
+            <h2>Child Comment</h2>
+            <textarea id="childText" rows="6" readonly></textarea>
+        </div>
+
+        <div class="card">
+            <h3>Is this humorous?</h3>
+            <label><input type="radio" name="humor" value=""> (unlabeled)</label><br />
+            <label><input type="radio" name="humor" value="yes"> Yes</label><br />
+            <label><input type="radio" name="humor" value="no"> No</label>
+        </div>
+
+        <div class="card">
+            <h3>Is this insulting?</h3>
+            <label><input type="radio" name="insult" value=""> (unlabeled)</label><br />
+            <label><input type="radio" name="insult" value="yes"> Yes</label><br />
+            <label><input type="radio" name="insult" value="no"> No</label>
+        </div>
+
+        <div class="card">
+            <h3>Notes</h3>
+            <textarea id="notes" rows="4"></textarea>
+        </div>
+
+        <div class="controls">
+            <button id="prevBtn">⬅ Previous</button>
+            <button id="nextBtn">Save & Next ➡</button>
+            <button id="downloadBtn">Download annotated CSV</button>
+        </div>
+    </div>
+
+    <script>
+        const CSV_URL = "izabel_reddit_gold_sample_2000.csv";
+        const LOCAL_STORAGE_KEY = "izabel_annotation_rows_v1";
+
+        let rows = [];
+        let currentIndex = 0;
+
+        const loadingEl = document.getElementById("loading");
+        const appEl = document.getElementById("app");
+        const progressText = document.getElementById("progressText");
+        const parentText = document.getElementById("parentText");
+        const childText = document.getElementById("childText");
+        const notesEl = document.getElementById("notes");
+        const prevBtn = document.getElementById("prevBtn");
+        const nextBtn = document.getElementById("nextBtn");
+        const downloadBtn = document.getElementById("downloadBtn");
+
+        function loadFromLocalStorage() {
+            const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (!saved) return;
+            try {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length === rows.length) {
+                    rows = parsed;
+                }
+            } catch (e) {
+                console.warn("Failed to parse saved annotations:", e);
+            }
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(rows));
+        }
+
+        function syncCurrentRowFromUI() {
+            if (!rows.length) return;
+            const row = rows[currentIndex];
+
+            const humorRadio = document.querySelector("input[name='humor']:checked");
+            const insultRadio = document.querySelector("input[name='insult']:checked");
+
+            row.humor_gold = humorRadio ? humorRadio.value : "";
+            row.insult_gold = insultRadio ? insultRadio.value : "";
+            row.notes = notesEl.value || "";
+        }
+
+        function setRadioGroupValue(name, value) {
+            const radios = document.querySelectorAll(`input[name='${name}']`);
+            radios.forEach(r => {
+                r.checked = r.value === value;
+            });
+        }
+
+        function showRow(index) {
+            if (!rows.length) return;
+            currentIndex = Math.max(0, Math.min(index, rows.length - 1));
+            const row = rows[currentIndex];
+
+            parentText.value = row.parent_text || "";
+            childText.value = row.text || "";
+
+            const humorValue = row.humor_gold || "";
+            const insultValue = row.insult_gold || "";
+            const notesValue = row.notes || "";
+
+            setRadioGroupValue("humor", humorValue);
+            setRadioGroupValue("insult", insultValue);
+            notesEl.value = notesValue;
+
+            const progress = ((currentIndex + 1) / rows.length) * 100;
+            progressText.textContent = `Row ${currentIndex + 1} of ${rows.length} (${progress.toFixed(1)}% done)`;
+        }
+
+        function downloadCSV() {
+            if (!rows.length) return;
+            syncCurrentRowFromUI();
+            const csv = Papa.unparse(rows);
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "izabel_reddit_gold_sample_2000_annotated.csv";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        prevBtn.addEventListener("click", () => {
+            if (!rows.length) return;
+            syncCurrentRowFromUI();
+            saveToLocalStorage();
+            if (currentIndex > 0) {
+                showRow(currentIndex - 1);
+            }
+        });
+
+        nextBtn.addEventListener("click", () => {
+            if (!rows.length) return;
+            syncCurrentRowFromUI();
+            saveToLocalStorage();
+            if (currentIndex < rows.length - 1) {
+                showRow(currentIndex + 1);
+            } else {
+                alert("You reached the last row.");
+            }
+        });
+
+        downloadBtn.addEventListener("click", () => {
+            downloadCSV();
+        });
+
+        // Load CSV and initialize
+        fetch(CSV_URL)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error("Failed to load CSV: " + response.statusText);
+                }
+                return response.text();
+            })
+            .then(text => {
+                const parsed = Papa.parse(text, {
+                    header: true,
+                    skipEmptyLines: true
+                });
+                rows = parsed.data;
+
+                rows.forEach(row => {
+                    if (!("humor_gold" in row)) row.humor_gold = "";
+                    if (!("insult_gold" in row)) row.insult_gold = "";
+                    if (!("notes" in row)) row.notes = "";
+                });
+
+                loadFromLocalStorage();
+                loadingEl.style.display = "none";
+                appEl.style.display = "block";
+                showRow(0);
+            })
+            .catch(err => {
+                loadingEl.textContent = "Error loading data: " + err.message;
+                console.error(err);
+            });
+    </script>
+</body>
+
+</html>
